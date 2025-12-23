@@ -368,7 +368,7 @@ elif st.session_state.page == 'Portfolio':
             "date": "December 2025",
             "desc": "Built an end-to-end NLP pipeline that ingests news from multiple APIs, preprocesses text, and applies TF-IDF, sentiment analysis, and document clustering to quantify sentiment intensity, sensationalism, and thematic structure across news sources.",
             "skills": "NLP · Python · Data Engineering",
-            "link": "https://clarity-context.streamlit.app/",  # Placeholder - you'll update once published
+            "link": "https://clarity-context-app.streamlit.app/",  # Placeholder - you'll update once published
             "image": "clarity_context_logo.png"  # Placeholder - you'll update once published
         },
         {
