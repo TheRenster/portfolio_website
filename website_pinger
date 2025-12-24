@@ -1,0 +1,21 @@
+import requests
+import time
+from datetime import datetime
+
+APPS = [
+    "https://clarity-context-app.streamlit.app/",
+    "https://lauren-knox-portfolio.streamlit.app/",
+    "https://deep-forecasting-renster.streamlit.app/",
+]
+
+PING_INTERVAL = 300  # 5 minutes (300 seconds)
+
+while True:
+    print(f"\nPing cycle started at {datetime.now()}")
+    for url in APPS:
+        try:
+            r = requests.get(url, timeout=30)
+            print(f"✅ Pinged {url} | Status: {r.status_code}")
+        except Exception as e:
+            print(f"❌ Failed to ping {url} | Error: {e}")
+    time.sleep(PING_INTERVAL)
