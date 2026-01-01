@@ -6,6 +6,12 @@ import random
 import base64
 import os
 
+# ==================== HEARTBEAT / UPTIME PING ====================
+if st.query_params.get("ping") == ["true"]:
+    st.write("OK")
+    st.stop()
+# ================================================================
+
 # Page configuration
 st.set_page_config(
     page_title="Lauren's Portfolio",
