@@ -7,7 +7,16 @@ import base64
 import os
 
 # ==================== HEARTBEAT / UPTIME PING ====================
-if st.query_params.get("ping") == ["true"]:
+try:
+    ping_value = st.query_params.get("ping")
+except Exception:
+    ping_value = None
+
+# `st.query_params.get()` can return a string, a list of strings, or None
+if isinstance(ping_value, list):
+    ping_value = ping_value[0] if ping_value else None
+
+if isinstance(ping_value, str) and ping_value.strip().lower() in {"1", "true", "yes", "ok"}:
     st.write("OK")
     st.stop()
 # ================================================================
@@ -178,12 +187,39 @@ def create_navigation():
 
 # Function to send email (protected)
 def send_email(name, sender_email, subject, message):
-    recipient = base64.b64decode("bGF1cmVuY2tub3hAZ21haWwuY29t").decode()
+    # IMPORTANT: Do not hardcode credentials in source control.
+    # Configure these via Streamlit Secrets (preferred) or environment variables.
+    recipient = (
+        st.secrets.get("SMTP_RECIPIENT", None)
+        if hasattr(st, "secrets")
+        else None
+    ) or os.getenv("SMTP_RECIPIENT")
 
-    smtp_server = "smtp.gmail.com"
-    smtp_port = 587
-    smtp_username = "laurencknox@gmail.com"
-    smtp_password = "xghq uarx wtul gasj"
+    smtp_server = (
+        st.secrets.get("SMTP_SERVER", "smtp.gmail.com")
+        if hasattr(st, "secrets")
+        else "smtp.gmail.com"
+    )
+    smtp_port = int(
+        (
+            st.secrets.get("SMTP_PORT", 587)
+            if hasattr(st, "secrets")
+            else 587
+        )
+    )
+    smtp_username = (
+        st.secrets.get("SMTP_USERNAME", None)
+        if hasattr(st, "secrets")
+        else None
+    ) or os.getenv("SMTP_USERNAME")
+    smtp_password = (
+        st.secrets.get("SMTP_PASSWORD", None)
+        if hasattr(st, "secrets")
+        else None
+    ) or os.getenv("SMTP_PASSWORD")
+
+    if not all([recipient, smtp_username, smtp_password]):
+        return False
     
     msg = MIMEMultipart()
     msg['From'] = smtp_username
