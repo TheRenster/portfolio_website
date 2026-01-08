@@ -21,7 +21,14 @@ jobs:
           )
           for url in "${urls[@]}"; do
             echo "Pinging: $url"
-            # -L follow redirects, --max-time avoid hanging, -f fail on >=400
-            curl -fsSL --max-time 60 "$url" | head -c 200 || true
-            echo ""
+            # Streamlit often redirects through an auth/cookie flow even for public apps.
+            # Use a cookie jar + browser UA to avoid redirect loops.
+            cookie_jar="$(mktemp)"
+            curl -sS -L \
+              -A "Mozilla/5.0" \
+              -c "$cookie_jar" -b "$cookie_jar" \
+              --max-time 60 \
+              -o /dev/null \
+              -w "HTTP %{http_code} -> %{url_effective}\n" \
+              "$url" || true
           done
