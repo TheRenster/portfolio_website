@@ -178,20 +178,27 @@ def create_navigation():
 
 # Function to send email (protected)
 def send_email(name, sender_email, subject, message):
-    recipient = base64.b64decode("bGF1cmVuY2tub3hAZ21haWwuY29t").decode()
-
-    smtp_server = "smtp.gmail.com"
-    smtp_port = 587
-    smtp_username = "laurencknox@gmail.com"
-    smtp_password = "xghq uarx wtul gasj"
-    
+    # Read from Streamlit Secrets first, then env vars as backup
+    recipient = st.secrets.get("SMTP_RECIPIENT", None) or os.getenv("SMTP_RECIPIENT")
+    smtp_server = st.secrets.get("SMTP_SERVER", "smtp.gmail.com") or os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port = int(st.secrets.get("SMTP_PORT", 587) or os.getenv("SMTP_PORT", 587))
+    smtp_username = st.secrets.get("SMTP_USERNAME", None) or os.getenv("SMTP_USERNAME")
+    smtp_password = st.secrets.get("SMTP_PASSWORD", None) or os.getenv("SMTP_PASSWORD")
+ 
+    if not all([recipient, smtp_username, smtp_password]):
+        print(
+            "Email not sent: missing SMTP secrets. "
+            f"recipient_set={bool(recipient)} username_set={bool(smtp_username)} password_set={bool(smtp_password)}"
+        )
+        return False
+ 
     msg = MIMEMultipart()
-    msg['From'] = smtp_username
-    msg['To'] = recipient
-    msg['Subject'] = f"Portfolio Contact: {subject}"
+    msg["From"] = smtp_username
+    msg["To"] = recipient
+    msg["Subject"] = f"Portfolio Contact: {subject}"
     body = f"From: {name}\nEmail: {sender_email}\n\n{message}"
-    msg.attach(MIMEText(body, 'plain'))
-    
+    msg.attach(MIMEText(body, "plain"))
+ 
     try:
         server = smtplib.SMTP(smtp_server, smtp_port)
         server.starttls()
@@ -200,6 +207,7 @@ def send_email(name, sender_email, subject, message):
         server.quit()
         return True
     except Exception as e:
+        print(f"Email sending failed: {type(e).__name__}: {e}")
         return False
 
 # ==================== ABOUT ME PAGE ====================
