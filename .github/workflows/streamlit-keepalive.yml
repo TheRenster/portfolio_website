@@ -1,0 +1,27 @@
+name: Streamlit keepalive
+
+on:
+  schedule:
+    # Every 10 minutes
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Streamlit apps (lightweight)
+        run: |
+          set -euo pipefail
+          urls=(
+            "https://clarity-context-app.streamlit.app/?ping=true"
+            "https://lauren-knox-portfolio.streamlit.app/?ping=true"
+            "https://deep-forecasting-renster.streamlit.app/?ping=true"
+          )
+          for url in "${urls[@]}"; do
+            echo "Pinging: $url"
+            # -L follow redirects, --max-time avoid hanging, -f fail on >=400
+            curl -fsSL --max-time 60 "$url" | head -c 200 || true
+            echo ""
+          done
