@@ -219,6 +219,10 @@ def send_email(name, sender_email, subject, message):
     ) or os.getenv("SMTP_PASSWORD")
 
     if not all([recipient, smtp_username, smtp_password]):
+        print(
+            "Email not sent: missing SMTP secrets/env vars. "
+            f"recipient_set={bool(recipient)} username_set={bool(smtp_username)} password_set={bool(smtp_password)}"
+        )
         return False
     
     msg = MIMEMultipart()
@@ -236,6 +240,8 @@ def send_email(name, sender_email, subject, message):
         server.quit()
         return True
     except Exception as e:
+        # Log the actual error in Streamlit Cloud logs (without exposing secrets in the UI).
+        print(f"Email sending failed: {type(e).__name__}: {e}")
         return False
 
 # ==================== ABOUT ME PAGE ====================
