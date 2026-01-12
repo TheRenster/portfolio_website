@@ -1,6 +1,7 @@
-import requests
 import time
 from datetime import datetime
+
+import requests
 
 APPS = [
     "https://clarity-context-app.streamlit.app/",
@@ -10,12 +11,30 @@ APPS = [
 
 PING_INTERVAL = 300  # 5 minutes (300 seconds)
 
+session = requests.Session()
+session.headers.update(
+    {
+        # Some hosts treat default python user agents as bots.
+        "User-Agent": "Mozilla/5.0 (keepalive; +https://github.com/)",
+    }
+)
+
 while True:
     print(f"\nPing cycle started at {datetime.now()}")
     for url in APPS:
         try:
-            r = requests.get(url, timeout=30)
-            print(f"✅ Pinged {url} | Status: {r.status_code}")
+            r = session.get(url, params={"ping": "true"}, timeout=30, allow_redirects=True)
+            final_url = getattr(r, "url", url)
+
+            # If the app requires Streamlit sign-in, requests will be redirected to /-/login,
+            # which means this ping never reaches the app backend and won't keep it awake.
+            if "/-/login" in final_url:
+                print(
+                    f"❌ Ping blocked by Streamlit login (app likely private): {url} | Final: {final_url}"
+                )
+                continue
+
+            print(f"✅ Pinged {url} | Status: {r.status_code} | Final: {final_url}")
         except Exception as e:
             print(f"❌ Failed to ping {url} | Error: {e}")
     time.sleep(PING_INTERVAL)

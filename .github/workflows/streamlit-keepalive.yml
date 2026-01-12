@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Ping Streamlit apps (lightweight)
+      - name: Ping Streamlit apps (keepalive)
         run: |
           set -euo pipefail
           urls=(
@@ -19,16 +19,50 @@ jobs:
             "https://lauren-knox-portfolio.streamlit.app/?ping=true"
             "https://deep-forecasting-renster.streamlit.app/?ping=true"
           )
+
+          failed=0
           for url in "${urls[@]}"; do
             echo "Pinging: $url"
-            # Streamlit often redirects through an auth/cookie flow even for public apps.
-            # Use a cookie jar + browser UA to avoid redirect loops.
+
+            # Streamlit sometimes redirects through an auth/cookie flow.
             cookie_jar="$(mktemp)"
-            curl -sS -L \
-              -A "Mozilla/5.0" \
-              -c "$cookie_jar" -b "$cookie_jar" \
-              --max-time 60 \
-              -o /dev/null \
-              -w "HTTP %{http_code} -> %{url_effective}\n" \
-              "$url" || true
+            result="$(
+              curl -sS -L \
+                --max-redirs 10 \
+                -A "Mozilla/5.0" \
+                -c "$cookie_jar" -b "$cookie_jar" \
+                --max-time 60 \
+                -o /dev/null \
+                -w "%{http_code} %{url_effective}" \
+                "$url" || true
+            )"
+
+            if [[ -z "${result:-}" ]]; then
+              echo "ERROR: curl failed (no result)"
+              failed=1
+              continue
+            fi
+
+            code="${result%% *}"
+            final="${result#* }"
+            echo "HTTP ${code} -> ${final}"
+
+            # If the app is set to "Private / requires sign-in", Streamlit redirects to /-/login.
+            # In that case, our ping never reaches the app backend and can't keep it awake.
+            if [[ "${final}" == *"/-/login"* ]]; then
+              echo "ERROR: Ping hit Streamlit login page (app likely private): ${final}"
+              failed=1
+              continue
+            fi
+
+            if [[ "${code}" -lt 200 || "${code}" -ge 400 ]]; then
+              echo "ERROR: Non-2xx/3xx response from ping (code=${code})"
+              failed=1
+              continue
+            fi
           done
+
+          if [[ "$failed" -ne 0 ]]; then
+            echo "::error::One or more keepalive pings did not reach the Streamlit app backend. If you see /-/login above, set the app visibility to Public (no sign-in) in Streamlit Community Cloud."
+            exit 1
+          fi
