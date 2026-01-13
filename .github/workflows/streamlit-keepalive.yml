@@ -11,58 +11,88 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Ping Streamlit apps (keepalive)
+      - name: Keep Streamlit apps awake (headless browser)
         run: |
           set -euo pipefail
-          urls=(
-            "https://clarity-context-app.streamlit.app/?ping=true"
-            "https://lauren-knox-portfolio.streamlit.app/?ping=true"
-            "https://deep-forecasting-renster.streamlit.app/?ping=true"
-          )
 
-          failed=0
-          for url in "${urls[@]}"; do
-            echo "Pinging: $url"
+          # Plain curl hits often only load Streamlit's "sleep screen" HTML and does NOT wake the runtime.
+          # We use a real (headless) browser to load the page and click the "wake up" button if present.
+          #
+          # Use the system Chrome on GitHub runners to avoid downloading a browser each run.
+          export CHROME_PATH="/usr/bin/google-chrome"
 
-            # Streamlit sometimes redirects through an auth/cookie flow.
-            cookie_jar="$(mktemp)"
-            result="$(
-              curl -sS -L \
-                --max-redirs 10 \
-                -A "Mozilla/5.0" \
-                -c "$cookie_jar" -b "$cookie_jar" \
-                --max-time 60 \
-                -o /dev/null \
-                -w "%{http_code} %{url_effective}" \
-                "$url" || true
-            )"
+          workdir="$(mktemp -d)"
+          pushd "$workdir" >/dev/null
+          npm init -y >/dev/null 2>&1
+          npm install --silent puppeteer-core@latest >/dev/null 2>&1
 
-            if [[ -z "${result:-}" ]]; then
-              echo "ERROR: curl failed (no result)"
-              failed=1
-              continue
-            fi
+          node - <<'NODE'
+          const fs = require("fs");
+          const puppeteer = require("puppeteer-core");
 
-            code="${result%% *}"
-            final="${result#* }"
-            echo "HTTP ${code} -> ${final}"
+          const urls = [
+            "https://clarity-context-app.streamlit.app/",
+            "https://lauren-knox-portfolio.streamlit.app/",
+            "https://deep-forecasting-renster.streamlit.app/",
+          ];
 
-            # If the app is set to "Private / requires sign-in", Streamlit redirects to /-/login.
-            # In that case, our ping never reaches the app backend and can't keep it awake.
-            if [[ "${final}" == *"/-/login"* ]]; then
-              echo "ERROR: Ping hit Streamlit login page (app likely private): ${final}"
-              failed=1
-              continue
-            fi
+          const chromePath = process.env.CHROME_PATH || "/usr/bin/google-chrome";
+          if (!fs.existsSync(chromePath)) {
+            console.error(`Chrome not found at ${chromePath}`);
+            process.exit(1);
+          }
 
-            if [[ "${code}" -lt 200 || "${code}" -ge 400 ]]; then
-              echo "ERROR: Non-2xx/3xx response from ping (code=${code})"
-              failed=1
-              continue
-            fi
-          done
+          async function run() {
+            const browser = await puppeteer.launch({
+              headless: "new",
+              executablePath: chromePath,
+              args: [
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+              ],
+            });
 
-          if [[ "$failed" -ne 0 ]]; then
-            echo "::error::One or more keepalive pings did not reach the Streamlit app backend. If you see /-/login above, set the app visibility to Public (no sign-in) in Streamlit Community Cloud."
-            exit 1
-          fi
+            let failed = false;
+            for (const url of urls) {
+              const page = await browser.newPage();
+              page.setDefaultTimeout(60_000);
+              try {
+                console.log(`Visiting: ${url}`);
+                const resp = await page.goto(url, { waitUntil: "domcontentloaded" });
+                console.log(`HTTP: ${resp ? resp.status() : "no-response"} | final: ${page.url()}`);
+
+                // If the app is asleep, Streamlit shows a wakeup screen with a button.
+                const wakeSelector = '[data-testid^="wakeup-button"]';
+                const wakeBtn = await page.$(wakeSelector);
+                if (wakeBtn) {
+                  console.log("Found wake button; clicking…");
+                  await wakeBtn.click();
+                  // Give Streamlit a moment to start the runtime.
+                  await page.waitForTimeout(15_000);
+                } else {
+                  console.log("No wake button found.");
+                }
+
+                // Keep the page open briefly to count as activity.
+                await page.waitForTimeout(10_000);
+              } catch (e) {
+                failed = true;
+                console.error(`ERROR for ${url}: ${e && e.message ? e.message : e}`);
+              } finally {
+                await page.close().catch(() => {});
+              }
+            }
+
+            await browser.close();
+            if (failed) process.exit(1);
+          }
+
+          run().catch((e) => {
+            console.error(e);
+            process.exit(1);
+          });
+NODE
+
+          popd >/dev/null
+
