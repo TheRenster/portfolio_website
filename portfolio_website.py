@@ -76,6 +76,14 @@ st.markdown("""
         border-radius: 0px !important;
     }
     
+    .stTextInput label, .stTextArea label, .stTextInput p, .stTextArea p {
+        color: #e0e0e0 !important;
+    }
+    
+    label[data-testid="stWidgetLabel"] p {
+        color: #e0e0e0 !important;
+    }
+    
     /* Hide Streamlit branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
