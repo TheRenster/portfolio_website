@@ -7,7 +7,9 @@ import base64
 import os
 
 # ==================== HEARTBEAT / UPTIME PING ====================
-if st.query_params.get("ping") == ["true"]:
+# Streamlit query params may be a string or a list depending on version.
+_ping = st.query_params.get("ping")
+if _ping == "true" or _ping == ["true"]:
     st.write("OK")
     st.stop()
 # ================================================================
